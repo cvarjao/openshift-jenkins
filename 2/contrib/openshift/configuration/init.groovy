@@ -11,10 +11,10 @@ println 'Configuring JNLP agent protocols'
 Jenkins.instance.setAgentProtocols(['JNLP4-connect', 'Ping'] as Set<String>)
 Jenkins.instance.save()
 
-println 'Configuring CSRF protection'
 //https://github.com/samrocketman/jenkins-bootstrap-shared/blob/master/scripts/configure-csrf-protection.groovy
-Jenkins.instance.setCrumbIssuer(new hudson.security.csrf.DefaultCrumbIssuer(true))
-Jenkins.instance.save()
+//println 'Configuring CSRF protection'
+//Jenkins.instance.setCrumbIssuer(new hudson.security.csrf.DefaultCrumbIssuer(true))
+//Jenkins.instance.save()
 
 println 'Configuring Slave to Master Access Control'
 //https://github.com/samrocketman/jenkins-bootstrap-shared/blob/master/scripts/security-disable-agent-master.groovy
@@ -62,3 +62,42 @@ if ('add'.equals(ghwhAction)){
   ghwhJob.save()
   println 'job \'github-webhook\' has been updated'
 }
+
+def jenkins = Jenkins.getInstance()
+User u = User.get("github-webhook")
+println "username:${u.getId()}"
+println "\'github-webhook\' API token:${u.getProperty(jenkins.security.ApiTokenProperty.class).getApiTokenInsecure()}"
+
+jenkins.getAuthorizationStrategy().add(Jenkins.READ, "github-webhook")
+jenkins.getAuthorizationStrategy().add(Item.BUILD, "github-webhook")
+jenkins.getAuthorizationStrategy().add(Item.DISCOVER, "github-webhook")
+jenkins.getAuthorizationStrategy().add(Item.READ, "github-webhook")
+
+
+println 'Approving script signatures'
+def sa = org.jenkinsci.plugins.scriptsecurity.scripts.ScriptApproval.get();
+def signatures=new XmlSlurper().parseText('''
+<signature>
+    <string>method hudson.model.AbstractItem updateByXml javax.xml.transform.stream.StreamSource</string>
+    <string>method hudson.model.ItemGroup getItem java.lang.String</string>
+    <string>method hudson.plugins.git.GitSCM getBranches</string>
+    <string>method hudson.plugins.git.GitSCM getRepositories</string>
+    <string>method hudson.plugins.git.GitSCM getUserRemoteConfigs</string>
+    <string>method hudson.plugins.git.GitSCMBackwardCompatibility getExtensions</string>
+    <string>method hudson.scm.SCM getBrowser</string>
+    <string>method java.io.BufferedReader readLine</string>
+    <string>method java.lang.AutoCloseable close</string>
+    <string>method java.lang.String getBytes java.nio.charset.Charset</string>
+    <string>method jenkins.model.Jenkins createProject java.lang.Class java.lang.String</string>
+    <string>method jenkins.model.ModifiableTopLevelItemGroup createProjectFromXML java.lang.String java.io.InputStream</string>
+    <string>new java.io.BufferedReader java.io.Reader</string>
+    <string>new java.io.ByteArrayInputStream byte[]</string>
+    <string>new javax.xml.transform.stream.StreamSource java.io.InputStream</string>
+    <string>staticField java.nio.charset.StandardCharsets UTF_8</string>
+    <string>staticMethod jenkins.model.Jenkins getInstance</string>
+</signature>''');
+
+signatures.string.each {
+  sa.approveSignature(it.text());
+}
+
